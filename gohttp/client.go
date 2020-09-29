@@ -2,14 +2,19 @@ package gohttp
 
 import (
 	"net/http"
+	"sync"
 )
 
 type httpClient struct {
-	Headers http.Header
+	builder *clientBuilder
+
+	client     *http.Client
+	clientOnce sync.Once
 }
 
 type HttpClient interface {
-	SetHeaders(header http.Header)
+
+	// Client http calls
 	Get(url string, header http.Header) (*http.Response, error)
 	Post(url string, header http.Header, body interface{}) (*http.Response, error)
 	Put(url string, header http.Header, body interface{}) (*http.Response, error)
@@ -21,13 +26,6 @@ type HttpClient interface {
 	Public interface to initialize the httpclient
 */
 
-func New() HttpClient {
-	return &httpClient{}
-}
-
-func (c *httpClient) SetHeaders(header http.Header) {
-	c.Headers = header
-}
 func (c *httpClient) Get(url string, headers http.Header) (*http.Response, error) {
 	return c.do(http.MethodGet, url, headers, nil)
 }

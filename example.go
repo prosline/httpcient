@@ -5,10 +5,11 @@ import (
 	"github.com/prosline/httpclient/gohttp"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
 var (
-	c = getExampleClient()
+	b = getExampleClient()
 )
 
 type User struct {
@@ -16,10 +17,15 @@ type User struct {
 	LastName  string `json:"last_name"`
 }
 
-func getExampleClient() gohttp.HttpClient {
-	c := gohttp.New()
+func getExampleClient() gohttp.ClientBuilder {
+	c := gohttp.NewBuilder()
+	c.SetMaxIdleConnections(20)
+	c.SetConnectionTimeout(2 * time.Second)
+	c.SetResponseTimeout(4 * time.Second)
+	c.DisableTimeOuts(true)
 	headers := make(http.Header)
-	headers.Set("Authorization", "Bearer ABC 123")
+	// The statement below forces a bad request since "Bearer ABC 123" is an invalid token
+	//headers.Set("Authorization", "Bearer ABC 123")
 	c.SetHeaders(headers)
 	return c
 }
@@ -31,6 +37,7 @@ func main() {
 
 // Get request functionality
 func getURL() {
+	c := b.Build()
 	res, err := c.Get("https://api.github.com", nil)
 	if err != nil {
 		panic(err)
@@ -40,6 +47,7 @@ func getURL() {
 	fmt.Println(string(bytes))
 }
 func createUser(user User) {
+	c := b.Build()
 	res, err := c.Post("https://api.github.com", nil, user)
 	if err != nil {
 		panic(err)

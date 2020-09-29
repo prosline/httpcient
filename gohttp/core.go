@@ -5,8 +5,15 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
+	"time"
+)
+const (
+	DEFAULT_MAX_IDLE_CONNECTIONS = 5
+	DEFAULT_CONNECTION_TIMEOUT = 2 * time.Second
+	DEFAULT_RESPONSE_TIMEOUT = 4 * time.Second
 )
 
 func (c *httpClient) getRequestBody(contentType string, body interface{}) ([]byte, error) {
@@ -24,7 +31,6 @@ func (c *httpClient) getRequestBody(contentType string, body interface{}) ([]byt
 	}
 }
 func (c *httpClient) do(method string, url string, headers http.Header, body interface{}) (*http.Response, error) {
-	client := http.Client{}
 	allHeaders := c.getRequestHeaders(headers)
 	reqBody, err := c.getRequestBody(allHeaders.Get("Content-Type"), body)
 	if err != nil {
@@ -36,13 +42,57 @@ func (c *httpClient) do(method string, url string, headers http.Header, body int
 
 	}
 	request.Header = allHeaders
+	client := c.getHttpClient()
 	return client.Do(request)
+}
+func (c *httpClient)getHttpClient() *http.Client{
+	if c.client != nil{
+		return c.client
+	}
 
+	c.client = &http.Client{
+		Timeout: c.getConnectionTimeOut() + c.getResponseTimeOut(),
+		Transport: &http.Transport{
+			MaxConnsPerHost: c.getMaxIdleconnections(),
+			ResponseHeaderTimeout: c.getResponseTimeOut(),
+			DialContext: (&net.Dialer{
+				Timeout: c.getConnectionTimeOut(),
+			}).DialContext,
+		},
+	}
+	return c.client
+}
+
+func (c *httpClient) getMaxIdleconnections() int{
+	if c.builder.maxIdleConnections > 0 {
+		return c.builder.maxIdleConnections
+	}
+	return DEFAULT_MAX_IDLE_CONNECTIONS
+}
+
+func (c *httpClient) getResponseTimeOut() time.Duration{
+	if c.builder.responseTimeout > 0{
+		return c.builder.responseTimeout
+	}
+	if c.builder.disableTimeouts {
+		return 0
+	}
+	return DEFAULT_RESPONSE_TIMEOUT
+}
+
+func (c *httpClient) getConnectionTimeOut() time.Duration{
+	if c.builder.connectionTimeout > 0{
+		return c.builder.connectionTimeout
+	}
+	if c.builder.disableTimeouts {
+		return 0
+	}
+	return DEFAULT_CONNECTION_TIMEOUT
 }
 func (c *httpClient) getRequestHeaders(headers http.Header) http.Header {
 	result := make(http.Header)
 	// Including common headers to Request
-	for h, v := range c.Headers {
+	for h, v := range c.builder.headers {
 		if len(v) > 0 {
 			result.Set(h, v[0])
 		}
