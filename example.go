@@ -3,13 +3,12 @@ package main
 import (
 	"fmt"
 	"github.com/prosline/httpclient/gohttp"
-	"io/ioutil"
 	"net/http"
 	"time"
 )
 
 var (
-	b = getExampleClient()
+	gitClient = getExampleClient()
 )
 
 type User struct {
@@ -17,42 +16,38 @@ type User struct {
 	LastName  string `json:"last_name"`
 }
 
-func getExampleClient() gohttp.ClientBuilder {
-	c := gohttp.NewBuilder()
-	c.SetMaxIdleConnections(20)
-	c.SetConnectionTimeout(2 * time.Second)
-	c.SetResponseTimeout(4 * time.Second)
-	c.DisableTimeOuts(true)
+func getExampleClient() gohttp.Client {
 	headers := make(http.Header)
-	// The statement below forces a bad request since "Bearer ABC 123" is an invalid token
-	//headers.Set("Authorization", "Bearer ABC 123")
-	c.SetHeaders(headers)
+	c := gohttp.NewBuilder().SetMaxIdleConnections(20).
+		SetConnectionTimeout(2 * time.Second).
+		SetResponseTimeout(4 * time.Second).
+		DisableTimeOuts(true).
+		SetHeaders(headers).Build()
 	return c
 }
 
 // Main example function
 func main() {
-	getURL()
+	for i := 0; i < 10; i++ {
+		go func() {
+			getURL()
+		}()
+	}
+	time.Sleep(5 * time.Second)
 }
 
 // Get request functionality
 func getURL() {
-	c := b.Build()
-	res, err := c.Get("https://api.github.com", nil)
+	res, err := gitClient.Get("https://api.github.com", nil)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(res.StatusCode)
-	bytes, _ := ioutil.ReadAll(res.Body)
-	fmt.Println(string(bytes))
-}
-func createUser(user User) {
-	c := b.Build()
-	res, err := c.Post("https://api.github.com", nil, user)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(res.StatusCode)
-	bytes, _ := ioutil.ReadAll(res.Body)
-	fmt.Println(string(bytes))
+
+	fmt.Println(res.Status())
+	fmt.Println(res.StatusCode())
+	fmt.Println(res.String())
+	//	var user User
+	//	if err := res.Unmarshal(&user); err != nil{
+	//		panic(err)
+	//	}
 }

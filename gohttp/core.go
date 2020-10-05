@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
@@ -30,7 +31,7 @@ func (c *httpClient) getRequestBody(contentType string, body interface{}) ([]byt
 		return json.Marshal(body)
 	}
 }
-func (c *httpClient) do(method string, url string, headers http.Header, body interface{}) (*http.Response, error) {
+func (c *httpClient) do(method string, url string, headers http.Header, body interface{}) (*Response, error) {
 	allHeaders := c.getRequestHeaders(headers)
 	reqBody, err := c.getRequestBody(allHeaders.Get("Content-Type"), body)
 	if err != nil {
@@ -43,23 +44,39 @@ func (c *httpClient) do(method string, url string, headers http.Header, body int
 	}
 	request.Header = allHeaders
 	client := c.getHttpClient()
-	return client.Do(request)
-}
-func (c *httpClient)getHttpClient() *http.Client{
-	if c.client != nil{
-		return c.client
+	// calling Go http.Client library
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	responseBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+	finalResponse := &Response{
+		status:     response.Status,
+		statusCode: response.StatusCode,
+		headers:    response.Header,
+		body:       responseBody,
 	}
 
-	c.client = &http.Client{
-		Timeout: c.getConnectionTimeOut() + c.getResponseTimeOut(),
-		Transport: &http.Transport{
-			MaxConnsPerHost: c.getMaxIdleconnections(),
-			ResponseHeaderTimeout: c.getResponseTimeOut(),
-			DialContext: (&net.Dialer{
-				Timeout: c.getConnectionTimeOut(),
-			}).DialContext,
-		},
-	}
+	return finalResponse, nil
+}
+func (c *httpClient)getHttpClient() *http.Client {
+
+	c.clientOnce.Do(func() {
+		c.client = &http.Client{
+			Timeout: c.getConnectionTimeOut() + c.getResponseTimeOut(),
+			Transport: &http.Transport{
+				MaxConnsPerHost:       c.getMaxIdleconnections(),
+				ResponseHeaderTimeout: c.getResponseTimeOut(),
+				DialContext: (&net.Dialer{
+					Timeout: c.getConnectionTimeOut(),
+				}).DialContext,
+			},
+		}
+	})
 	return c.client
 }
 
